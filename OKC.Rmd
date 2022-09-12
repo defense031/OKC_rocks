@@ -1,0 +1,110 @@
+---
+title: 'Oklahoma City Thunder Data Science Internship: Technical Assessment'
+author: "Austin Semmel"
+date: '2022-09-11'
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+  knitr::opts_chunk$set(echo = FALSE,message=FALSE)
+```
+
+## Shot Distribution by Team
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(kableExtra)
+library(tibble)
+
+#Read in the data
+shots<-as.data.frame(read.csv("shots_data.csv"))
+
+#calculate distance from basket for each shot 
+shots$distance<-sqrt((shots$x)^2+(shots$y)^2)
+
+#Create new var called corner_three which states whether a shot attempt was a corner 3 or not
+shots<-mutate(shots,corner_three=ifelse(
+  (distance>22)&(y<+7.8),1,0))
+#Do the same thing, but for non-corner threes
+shots<-mutate(shots,non_corner_three=ifelse(
+  (distance>23.75)&(y>7.8),1,0))
+
+#Get column number of corner three and non_corner_three, sum them to get whether each individual shot is a three or not
+shots$three<-rowSums(shots[,which(colnames(shots)=="corner_three"):
+                            which(colnames(shots)=="non_corner_three")])
+
+
+#Get shot type for each
+shots<-mutate(shots,type=ifelse(
+  (corner_three==1),"C3","2PT"))
+#Replace 2PT with NC3 if NC3==TRUE
+shots[which(shots$non_corner_three==1),which(colnames(shots)=="type")]<-"NC3"
+
+#Find shot distribution by Team
+shot_dist<-shots%>%group_by(team,type)%>%summarize(n=n())
+
+#Find total Team Attempts
+team_shots<-as.data.frame(shots%>%group_by(team)%>%summarise(att=n()))
+
+#Combine with shot dist
+#Team A
+shot_tbl<-as.data.frame(matrix(ncol=3,nrow=6))
+colnames(shot_tbl)<-c("Team","Type","Attempts")
+shot_tbl[1:3,2:3]<-shot_dist[1:3,2:3]
+shot_tbl[1:3,3]<-round(shot_tbl[1:3,3]/team_shots[1,2],3)
+shot_tbl[1,1]<-"A"
+#Team B
+shot_tbl[4:6,2:3]<-shot_dist[4:6,2:3]
+shot_tbl[4:6,3]<-round(shot_tbl[4:6,3]/team_shots[2,2],3)
+shot_tbl[4,1]<-"B"
+shot_tbl[(which(is.na(shot_tbl$Team))),1]<-""
+kable(shot_tbl)
+```
+
+## Effective Field Goal Percentage by Team
+```{r}
+#Calculate effective eFG by Team
+eFG<-as.data.frame(matrix(nrow=4,ncol=3))
+colnames(eFG)<-c(" ","Team A","Team B")
+eFG[,1]<-c("2PT","C3","NC3","Overall")
+
+#2PT Team A
+eFG[1,which(colnames(eFG)=="Team A")]<-round(
+  length(which(shots$fgmade==1&shots$type=="2PT"&shots$team=="Team A"))/length(which(shots$type=="2PT"&shots$team=="Team A")),
+  3)
+#Corner 3 Team A (C3 Made *1.5 / C3 Att)
+eFG[2,which(colnames(eFG)=="Team A")]<-round(
+  (length(which(shots$fgmade==1&shots$type=="C3"&shots$team=="Team A"))*1.5)/length(which(shots$type=="C3"&shots$team=="Team A")),
+  3)
+#NC3 Team A (NC3 Made*1.5/NC3 Att)
+eFG[3,which(colnames(eFG)=="Team A")]<-round(
+  (length(which(shots$fgmade==1&shots$type=="NC3"&shots$team=="Team A"))*1.5)/length(which(shots$type=="NC3"&shots$team=="Team A")),
+  3)
+#Overall Team A ((2PT Made + 3PM*.5) / FGA)
+eFG[4,which(colnames(eFG)=="Team A")]<-round(
+  (length(which(shots$fgmade==1&shots$team=="Team A"))+length(which(shots$fgmade==1&shots$three==1&shots$team=="Team A"))*0.5)/length(which(shots$team=="Team A")),
+  3)
+
+
+#Team B
+#2PT Team B
+eFG[1,which(colnames(eFG)=="Team B")]<-round(
+  length(which(shots$fgmade==1&shots$type=="2PT"&shots$team=="Team B"))/length(which(shots$type=="2PT"&shots$team=="Team B")),
+  3)
+#Corner 3 Team B (C3 Made *1.5 / C3 Att)
+eFG[2,which(colnames(eFG)=="Team B")]<-round(
+  (length(which(shots$fgmade==1&shots$type=="C3"&shots$team=="Team B"))*1.5)/length(which(shots$type=="C3"&shots$team=="Team B")),
+  3)
+#NC3 Team B (NC3 Made*1.5/NC3 Att)
+eFG[3,which(colnames(eFG)=="Team B")]<-round(
+  (length(which(shots$fgmade==1&shots$type=="NC3"&shots$team=="Team B"))*1.5)/length(which(shots$type=="NC3"&shots$team=="Team B")),
+  3)
+#Overall Team B ((2PT Made + 3PM*.5) / FGA)
+eFG[4,which(colnames(eFG)=="Team B")]<-round(
+  (length(which(shots$fgmade==1&shots$team=="Team B"))+length(which(shots$fgmade==1&shots$three==1&shots$team=="Team B"))*0.5)/length(which(shots$team=="Team B")),
+  3)
+eFG<-as_tibble(eFG)
+kbl(eFG)
+```
+
